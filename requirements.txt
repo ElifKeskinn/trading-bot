@@ -1,0 +1,7 @@
+pandas
+pandas_ta
+numpy
+matplotlib
+seaborn
+python-binance
+tabulate
