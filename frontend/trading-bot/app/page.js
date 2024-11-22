@@ -2,8 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { startBot, stopBot, runBacktest, fetchTrades, fetchProfit, fetchBotStatus } from '../services/api';
-import TradeTable from '../components/TradeTable';
-import { Bar } from 'react-chartjs-2';
+import BotControls from '../components/BotControls';
+import BacktestSection from '../components/BacktestSection';
+import TradesSection from '../components/TradesSection';
+import ProfitDataSection from '../components/ProfitDataSection';
+import ErrorAlert from '../components/ErrorAlert';
+import { toast } from 'react-toastify';
 import 'chart.js/auto';
 
 export default function Dashboard() {
@@ -17,6 +21,7 @@ export default function Dashboard() {
     const [labels, setLabels] = useState([]);
     const [trades, setTrades] = useState([]);
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
     // Bot durumunu kontrol etmek için
     useEffect(() => {
@@ -26,6 +31,7 @@ export default function Dashboard() {
                 setBotStatus(response.data.bot_running);
             } catch (error) {
                 console.error('Error fetching bot status:', error);
+                setError('Error fetching bot status.');
             }
         };
 
@@ -33,34 +39,43 @@ export default function Dashboard() {
     }, []);
 
     const handleStartBot = async () => {
+        setIsLoading(true);
         try {
             const payload = { symbol, historical_days: historicalDays, timeframes, initial_capital: initialCapital };
             const response = await startBot(payload);
-            alert(response.data.message);
+            toast.success(response.data.message);
             setBotStatus(true);
         } catch (error) {
             console.error(error);
             if (error.response?.status === 400 && error.response.data.message === "Bot is already running.") {
-                alert("Bot is already running.");
+                toast.info("Bot is already running.");
                 setBotStatus(true);
             } else {
+                toast.error(error.response?.data?.message || 'Error starting bot.');
                 setError(error.response?.data?.message || 'Error starting bot.');
             }
+        } finally {
+            setIsLoading(false);
         }
     };
 
     const handleStopBot = async () => {
+        setIsLoading(true);
         try {
             const response = await stopBot();
-            alert(response.data.message);
+            toast.success(response.data.message);
             setBotStatus(false);
         } catch (error) {
             console.error(error);
+            toast.error(error.response?.data?.message || 'Error stopping bot.');
             setError(error.response?.data?.message || 'Error stopping bot.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
     const handleRunBacktest = async () => {
+        setIsLoading(true);
         try {
             const payload = { symbol, historical_days: historicalDays, timeframes, initial_capital: initialCapital };
             const response = await runBacktest(payload);
@@ -70,13 +85,18 @@ export default function Dashboard() {
             setProfitData(profits);
             const labels = Object.keys(response.data).filter(key => key !== 'trades').map(tf => tf); // Zaman dilimlerini etiket olarak al
             setLabels(labels);
+            toast.success('Backtest completed successfully.');
         } catch (error) {
             console.error(error);
+            toast.error('Error running backtest.');
             setError('Error running backtest.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
     const handleFetchResults = async () => {
+        setIsLoading(true);
         try {
             const [tradesResponse, profitResponse] = await Promise.all([
                 fetchTrades(),
@@ -94,120 +114,58 @@ export default function Dashboard() {
                 const labels = profits.map((_, index) => `Timeframe ${index + 1}`); // Labels oluşturmak için
                 setLabels(labels);
             }
+
+            toast.success('Results fetched successfully.');
         } catch (error) {
             console.error(error);
+            toast.error('Error fetching results.');
             setError('Error fetching results.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
     return (
-        <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-            <h1>Crypto Trading Bot Dashboard</h1>
+        <div className="dashboard-container">
+            <h1 className="text-4xl font-bold text-center mb-8">Crypto Trading Bot Dashboard</h1>
 
-            {error && <p style={{ color: 'red' }}>{error}</p>}
+            <ErrorAlert error={error} />
 
-            <section style={{ marginBottom: '40px', border: '1px solid #ccc', padding: '20px', borderRadius: '5px' }}>
-                <h2>Bot Controls</h2>
-                <div style={{ marginBottom: '10px' }}>
-                    <label style={{ marginRight: '10px' }}>Symbol:</label>
-                    <input type="text" value={symbol} onChange={(e) => setSymbol(e.target.value)} />
-                </div>
-                <div style={{ marginBottom: '10px' }}>
-                    <label style={{ marginRight: '10px' }}>Historical Days:</label>
-                    <input type="number" value={historicalDays} onChange={(e) => setHistoricalDays(e.target.value)} />
-                </div>
-                <div style={{ marginBottom: '10px' }}>
-                    <label style={{ marginRight: '10px' }}>Timeframes (comma separated):</label>
-                    <input
-                        type="text"
-                        value={timeframes.join(',')}
-                        onChange={(e) => setTimeframes(e.target.value.split(',').map(tf => tf.trim()))}
-                    />
-                </div>
-                <div style={{ marginBottom: '10px' }}>
-                    <label style={{ marginRight: '10px' }}>Initial Capital (USDT):</label>
-                    <input type="number" value={initialCapital} onChange={(e) => setInitialCapital(e.target.value)} />
-                </div>
-                <button onClick={handleStartBot} disabled={botStatus} style={{ marginRight: '10px' }}>
-                    Start Bot
-                </button>
-                <button onClick={handleStopBot} disabled={!botStatus}>
-                    Stop Bot
-                </button>
-            </section>
+            <BotControls
+                symbol={symbol}
+                setSymbol={setSymbol}
+                historicalDays={historicalDays}
+                setHistoricalDays={setHistoricalDays}
+                timeframes={timeframes}
+                setTimeframes={setTimeframes}
+                initialCapital={initialCapital}
+                setInitialCapital={setInitialCapital}
+                handleStartBot={handleStartBot}
+                handleStopBot={handleStopBot}
+                botStatus={botStatus}
+                isLoading={isLoading}
+            />
 
-            <section style={{ marginBottom: '40px', border: '1px solid #ccc', padding: '20px', borderRadius: '5px' }}>
-                <h2>Backtest</h2>
-                <button onClick={handleRunBacktest} style={{ marginBottom: '20px' }}>Run Backtest</button>
-                {Object.keys(backtestResults).length > 0 && (
-                    <div>
-                        <h3>Backtest Results</h3>
-                        {Object.entries(backtestResults).map(([timeframe, result]) => (
-                            <div key={timeframe} style={{ marginBottom: '20px' }}>
-                                <h4>{timeframe} Timeframe</h4>
-                                <p>Profit: {result.profit.toFixed(2)} USDT</p>
-                                <TradeTable trades={result.trades} />
-                            </div>
-                        ))}
-                        <h3>Profit Comparison</h3>
-                        <Bar
-                            data={{
-                                labels: labels,
-                                datasets: [
-                                    {
-                                        label: 'Profit/Loss (USDT)',
-                                        data: profitData,
-                                        backgroundColor: profitData.map(p => p > 0 ? 'rgba(75, 192, 192, 0.6)' : 'rgba(255, 99, 132, 0.6)'),
-                                        borderColor: profitData.map(p => p > 0 ? 'rgba(75, 192, 192, 1)' : 'rgba(255, 99, 132, 1)'),
-                                        borderWidth: 1,
-                                    }
-                                ]
-                            }}
-                            options={{
-                                scales: {
-                                    y: {
-                                        beginAtZero: true
-                                    }
-                                }
-                            }}
-                        />
-                    </div>
-                )}
-            </section>
+            <BacktestSection
+                backtestResults={backtestResults}
+                profitData={profitData}
+                labels={labels}
+                handleRunBacktest={handleRunBacktest}
+                isLoading={isLoading}
+            />
 
-            <section style={{ marginBottom: '40px', border: '1px solid #ccc', padding: '20px', borderRadius: '5px' }}>
-                <h2>Trades</h2>
-                <button onClick={handleFetchResults} style={{ marginBottom: '20px' }}>Fetch Trades & Profit Data</button>
-                {trades.length > 0 && <TradeTable trades={trades} />}
-            </section>
+            <TradesSection
+                trades={trades}
+                handleFetchResults={handleFetchResults}
+                isLoading={isLoading}
+            />
 
-            <section style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '5px' }}>
-                <h2>Profit Data</h2>
-                <button onClick={handleFetchResults} style={{ marginBottom: '20px' }}>Fetch Trades & Profit Data</button>
-                {profitData.length > 0 && (
-                    <Bar
-                        data={{
-                            labels: labels,
-                            datasets: [
-                                {
-                                    label: 'Profit/Loss (USDT)',
-                                    data: profitData,
-                                    backgroundColor: profitData.map(p => p > 0 ? 'rgba(75, 192, 192, 0.6)' : 'rgba(255, 99, 132, 0.6)'),
-                                    borderColor: profitData.map(p => p > 0 ? 'rgba(75, 192, 192, 1)' : 'rgba(255, 99, 132, 1)'),
-                                    borderWidth: 1,
-                                }
-                            ]
-                        }}
-                        options={{
-                            scales: {
-                                y: {
-                                    beginAtZero: true
-                                }
-                            }
-                        }}
-                    />
-                )}
-            </section>
-            </div>
-        );
-    }
+            <ProfitDataSection
+                profitData={profitData}
+                labels={labels}
+                handleFetchResults={handleFetchResults}
+                isLoading={isLoading}
+            />
+        </div>
+    );
+}

@@ -1,7 +1,16 @@
-/* crypto-trading-bot-frontend/app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* Özel stiller */
 body {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+  @apply bg-gray-100;
+}
+
+.dashboard-container {
+  @apply max-w-7xl mx-auto p-6;
+}
+
+section {
+  @apply mb-8;
 }
